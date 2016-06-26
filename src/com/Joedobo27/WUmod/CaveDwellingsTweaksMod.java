@@ -357,8 +357,9 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
         ctmPoll_Wall.instrument(new ExprEditor() {
             @Override
             public void edit(MethodCall methodCall) throws  CannotCompileException {
-                if (Objects.equals("isOnSurface", methodCall.getMethodName()) && methodCall.getLineNumber() == 254){
+                if (Objects.equals("isOnSurface", methodCall.getMethodName()) && methodCall.getLineNumber() == 1254){
                     methodCall.replace("$_ = true;");
+                    logger.log(Level.FINE, "Within Wall.class poll() altered isOnSurface to always be true at " + methodCall.getLineNumber());
                     removeAcceleratedOffDeedDecayDone[1] = true;
                 }
             }
@@ -371,7 +372,7 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
             case "[false, false]":
                 logger.log(Level.INFO, "ERROR all of removeAcceleratedOffDeedDecay failed.");
                 break;
-            default:logger.log(Level.INFO, "ERROR at least one part failed in removeAcceleratedOffDeedDecay.");
+            default: logger.log(Level.INFO, "ERROR at least one part failed in removeAcceleratedOffDeedDecay.");
         }
     }
 
