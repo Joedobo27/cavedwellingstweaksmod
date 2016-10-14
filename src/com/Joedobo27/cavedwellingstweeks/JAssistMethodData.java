@@ -1,11 +1,6 @@
 package com.Joedobo27.cavedwellingstweeks;
 
-import com.sun.istack.internal.NotNull;
-import com.sun.istack.internal.Nullable;
-import javassist.CannotCompileException;
-import javassist.CtClass;
 import javassist.CtMethod;
-import javassist.CtNewMethod;
 import javassist.bytecode.AccessFlag;
 import javassist.bytecode.CodeAttribute;
 import javassist.bytecode.CodeIterator;
@@ -13,6 +8,7 @@ import javassist.bytecode.MethodInfo;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.logging.Logger;
 
 @SuppressWarnings("unused")
 class JAssistMethodData {
@@ -22,57 +18,47 @@ class JAssistMethodData {
     private CodeAttribute codeAttribute;
     private CodeIterator codeIterator;
     private CtMethod ctMethod;
-
+    private static Logger logger = Logger.getLogger(JAssistMethodData.class.getName());
 
     JAssistMethodData(JAssistClassData jAssistClassData, String descriptor, String methodName) throws NullPointerException {
         parentClass = jAssistClassData;
         methodInfo = Arrays.stream(jAssistClassData.getClassFile().getMethods().toArray())
                 .map((Object value) -> (MethodInfo) value)
-                .filter((MethodInfo value) -> Objects.equals(value.getDescriptor(), descriptor))
-                .filter((MethodInfo value) -> Objects.equals(value.getName(), methodName))
+                .filter(value ->
+                        Objects.equals(value.getDescriptor(), descriptor) &&
+                        Objects.equals(value.getName(), methodName))
                 .findFirst()
                 .orElse(null);
         if (methodInfo == null)
             throw new NullPointerException();
         codeAttribute = methodInfo.getCodeAttribute();
         codeIterator = codeAttribute.iterator();
-        setCtMethod(descriptor, methodName);
+        ctMethod = setCtMethod(descriptor, methodName);
     }
 
-    JAssistMethodData(@NotNull JAssistClassData jAssistClassData, int modifiers, @Nullable CtClass returnType, String mname, @Nullable CtClass[] parameters,
-                      CtClass[] exceptions, String bodySource, @NotNull CtClass declaring) throws CannotCompileException {
-        CtMethod ctMethod = CtNewMethod.make( modifiers, returnType, mname, parameters, exceptions, bodySource, declaring);
-        jAssistClassData.getCtClass().addMethod(ctMethod);
-        parentClass = jAssistClassData;
-        methodInfo = Arrays.stream(jAssistClassData.getClassFile().getMethods().toArray())
-                .map((Object value) -> (MethodInfo) value)
-                .filter((MethodInfo value) -> Objects.equals(value.getDescriptor(), ctMethod.getSignature()))
-                .filter((MethodInfo value) -> Objects.equals(value.getName(), ctMethod.getName()))
-                .findFirst()
-                .orElse(null);
-        if (methodInfo == null)
-            throw new NullPointerException();
-        codeAttribute = methodInfo.getCodeAttribute();
-        codeIterator = codeAttribute.iterator();
-
-    }
-
-    private void setCtMethod(String descriptor, String methodName) {
-        boolean isPrivate = (methodInfo.getAccessFlags() & (AccessFlag.PRIVATE)) != 0;
-        if (isPrivate){
-            ctMethod = Arrays.stream(parentClass.getCtClass().getDeclaredMethods())
-                    .filter((CtMethod value) -> Objects.equals(value.getSignature(), descriptor))
-                    .filter((CtMethod value) -> Objects.equals(value.getName(), methodName))
+    private CtMethod setCtMethod(String descriptor, String methodName) {
+        CtMethod toReturn;
+        boolean isPublic = (methodInfo.getAccessFlags() & (AccessFlag.PUBLIC)) != 0;
+        if (!isPublic){
+            //Arrays.stream(parentClass.getCtClass().getDeclaredMethods())
+            //        .forEach(value -> logger.log(Level.INFO, "method "+ parentClass.getCtClass().getSimpleName() + " : "
+            //                + value.getName() + " " + value.getSignature()));
+            toReturn = Arrays.stream(parentClass.getCtClass().getDeclaredMethods())
+                    .filter(value ->
+                            Objects.equals(value.getSignature(), descriptor) &&
+                            Objects.equals(value.getName(), methodName))
                     .findFirst()
                     .orElse(null);
         }
         else {
-            ctMethod = Arrays.stream(parentClass.getCtClass().getMethods())
-                    .filter((CtMethod value) -> Objects.equals(value.getSignature(), descriptor))
-                    .filter((CtMethod value) -> Objects.equals(value.getName(), methodName))
+            toReturn = Arrays.stream(parentClass.getCtClass().getMethods())
+                    .filter(value ->
+                            Objects.equals(value.getSignature(), descriptor) &&
+                            Objects.equals(value.getName(), methodName))
                     .findFirst()
                     .orElse(null);
         }
+        return toReturn;
     }
 
     MethodInfo getMethodInfo() {

@@ -128,24 +128,19 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
         if (!allowBuildAgainstWalls)
             return;
 
-        final int[] allowBuildAgainstWallsSuccesses = new int[]{0};
+        final int[] successes = new int[]{0};
         methodsStructure.getCtClass().instrument(new ExprEditor() {
             @Override
             public void edit(MethodCall methodCall) throws CannotCompileException {
                 if (Objects.equals("needSurroundingTilesFloors", methodCall.getMethodName())){
+                    logger.log(Level.FINE, methodsStructure.getCtClass().getName() + " class,  edit call to " +
+                            methodCall.getMethodName() + " at index " + methodCall.getLineNumber());
                     methodCall.replace("$_ = false;");
-                    logger.log(Level.FINE, "Installed hook for needSurroundingTilesFloors() at " + methodCall.getLineNumber());
-                    allowBuildAgainstWallsSuccesses[0] = 1;
+                    successes[0] = 1;
                 }
             }
         });
-        boolean changesSuccessful = !Arrays.stream(allowBuildAgainstWallsSuccesses).anyMatch(value -> value == 0);
-        if (changesSuccessful) {
-            logger.log(Level.INFO, "allowBuildAgainstWalls option changes SUCCESSFUL");
-        } else {
-            logger.log(Level.INFO, "allowBuildAgainstWalls option changes FAILURE");
-            logger.log(Level.FINE, Arrays.toString(allowBuildAgainstWallsSuccesses));
-        }
+        evaluateChangesArray(successes, "allowBuildAgainstWalls");
     }
 
     @SuppressWarnings("unused")
@@ -192,7 +187,7 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
         if (!allowAnyBuildingType)
             return;
 
-        final int[] allowAnyBuildingTypeSuccesses = new int[]{0};
+        final int[] successes = new int[]{0};
         JAssistClassData wallEnum = new JAssistClassData("com.wurmonline.server.structures.WallEnum", pool);
         JAssistMethodData getMaterialsFromToolType = new JAssistMethodData(wallEnum,
                 "(Lcom/wurmonline/server/items/Item;Lcom/wurmonline/server/creatures/Creature;)[B", "getMaterialsFromToolType");
@@ -200,36 +195,31 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
             @Override
             public void edit(MethodCall methodCall) throws CannotCompileException {
                 if (Objects.equals("isOnSurface", methodCall.getMethodName())){
+                    logger.log(Level.FINE, getMaterialsFromToolType.getCtMethod().getName() + " method,  edit call to " +
+                            methodCall.getMethodName() + " at index " + methodCall.getLineNumber());
                     methodCall.replace("$_ = true;");
-                    logger.log(Level.FINE, "getMaterialsFromToolType(), isOnSurface is always true. line: " + methodCall.getLineNumber());
-                    allowAnyBuildingTypeSuccesses[0] = 1;
+                    successes[0] = 1;
                 }
             }
         });
-        boolean changesSuccessful = !Arrays.stream(allowAnyBuildingTypeSuccesses).anyMatch(value -> value == 0);
-        if (changesSuccessful) {
-            logger.log(Level.INFO, "allowAnyBuildingType option changes SUCCESSFUL");
-        } else {
-            logger.log(Level.INFO, "allowAnyBuildingType option changes FAILURE");
-            logger.log(Level.FINE, Arrays.toString(allowAnyBuildingTypeSuccesses));
-        }
-
+        evaluateChangesArray(successes, "allowAnyBuildingType");
     }
 
     static private void buildOnPlainCaveFloorBytecode() throws NotFoundException, CannotCompileException {
         if (!buildOnPlainCaveFloor)
             return;
 
-        final int[] buildOnPlainCaveFloorSuccesses = new int[]{0,0,0};
+        final int[] successes = new int[]{0,0,0};
         JAssistMethodData  canPlanStructureAt =  new JAssistMethodData(methodsStructure,
                 "(Lcom/wurmonline/server/creatures/Creature;Lcom/wurmonline/server/items/Item;III)Z", "canPlanStructureAt");
         canPlanStructureAt.getCtMethod().instrument(new ExprEditor(){
             @Override
             public void edit(FieldAccess fieldAccess) throws CannotCompileException {
                 if (Objects.equals("id", fieldAccess.getFieldName()) && Objects.equals("com.wurmonline.mesh.Tiles$Tile", fieldAccess.getClassName())) {
+                    logger.log(Level.FINE, canPlanStructureAt.getCtMethod().getName() + " field,  edit call to " +
+                            fieldAccess.getFieldName() + " at index " + fieldAccess.getLineNumber());
                     fieldAccess.replace("$_ = type;");
-                    logger.log(Level.FINE, "canPlanStructureAt of methodsStructure, TILE_CAVE_FLOOR_REINFORCED now returns type instead at: " + fieldAccess.getLineNumber());
-                    buildOnPlainCaveFloorSuccesses[0] = 1;
+                    successes[0] = 1;
                 }
             }
         });
@@ -240,9 +230,10 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
             @Override
             public void edit(MethodCall methodCall) throws CannotCompileException {
                 if (Objects.equals("decodeType", methodCall.getMethodName()) && methodCall.getLineNumber() == 429){
+                    logger.log(Level.FINE, expandHouseTile.getCtMethod().getName() + " method,  edit call to " +
+                            methodCall.getMethodName() + " at index " + methodCall.getLineNumber());
                     methodCall.replace("$_ = 207;");
-                    logger.log(Level.FINE, "expandHouseTile of methodsStructure, decodeType now always returns reinforced floor id");
-                    buildOnPlainCaveFloorSuccesses[1] = 1;
+                    successes[1] = 1;
                 }
             }
         });
@@ -255,20 +246,14 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
             public void edit(FieldAccess fieldAccess) throws CannotCompileException {
                 if (Objects.equals("id", fieldAccess.getFieldName()) && Objects.equals("com.wurmonline.mesh.Tiles$Tile", fieldAccess.getClassName()) &&
                         fieldAccess.getLineNumber() == 116) {
+                    logger.log(Level.FINE, getBehavioursFor.getCtMethod().getName() + " field,  edit call to " +
+                            fieldAccess.getFieldName() + " at index " + fieldAccess.getLineNumber());
                     fieldAccess.replace("$_ = type;");
-                    logger.log(Level.FINE, "getBehavioursFor in caveTileBehaviour now allows any floor type. change: " + fieldAccess.getLineNumber());
-                    buildOnPlainCaveFloorSuccesses[2] = 1;
+                    successes[2] = 1;
                 }
             }
         });
-
-        boolean changesSuccessful = !Arrays.stream(buildOnPlainCaveFloorSuccesses).anyMatch(value -> value == 0);
-        if (changesSuccessful) {
-            logger.log(Level.INFO, "buildOnPlainCaveFloor option changes SUCCESSFUL");
-        } else {
-            logger.log(Level.INFO, "buildOnPlainCaveFloor option changes FAILURE");
-            logger.log(Level.FINE, Arrays.toString(buildOnPlainCaveFloorSuccesses));
-        }
+        evaluateChangesArray(successes, "buildOnPlainCaveFloor");
 
         // There is no code in WU that stops mining actions (mine, flatten, level) or using concrete on corners that have structures on them.
         // I'll be inserting lines that call my structure detection method "isTileCornerFixedByStructure".
@@ -307,7 +292,7 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
     static private void removeAcceleratedOffDeedDecayBytecode() throws NotFoundException, CannotCompileException {
         if (!removeAcceleratedOffDeedDecay)
             return;
-        final int[] removeAcceleratedOffDeedDecayDone = {0, 0};
+        final int[] successes = {0, 0};
         JAssistClassData floor = new JAssistClassData("com.wurmonline.server.structures.Floor", pool);
         JAssistMethodData pollFloor = new JAssistMethodData(floor, "(JLcom/wurmonline/server/zones/VolaTile;Lcom/wurmonline/server/structures/Structure;)Z",
                 "poll");
@@ -315,9 +300,10 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
             @Override
             public void edit(MethodCall methodCall) throws CannotCompileException {
                 if (Objects.equals("isOnSurface", methodCall.getMethodName())){
+                    logger.log(Level.FINE, pollFloor.getCtMethod().getName() + " method,  edit call to " +
+                            methodCall.getMethodName() + " at index " + methodCall.getLineNumber());
                     methodCall.replace("$_ = true;");
-                    logger.log(Level.FINE, "Within Floor.class poll() altered isOnSurface to always be true at " + methodCall.getLineNumber());
-                    removeAcceleratedOffDeedDecayDone[0] = 1;
+                    successes[0] = 1;
                 }
             }
         });
@@ -329,20 +315,14 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
             @Override
             public void edit(MethodCall methodCall) throws  CannotCompileException {
                 if (Objects.equals("isOnSurface", methodCall.getMethodName()) && methodCall.getLineNumber() == 1254){
+                    logger.log(Level.FINE, pollFloor.getCtMethod().getName() + " method,  edit call to " +
+                            methodCall.getMethodName() + " at index " + methodCall.getLineNumber());
                     methodCall.replace("$_ = true;");
-                    logger.log(Level.FINE, "Within Wall.class poll() altered isOnSurface to always be true at " + methodCall.getLineNumber());
-                    removeAcceleratedOffDeedDecayDone[1] = 1;
+                    successes[1] = 1;
                 }
             }
         });
-
-        boolean changesSuccessful = !Arrays.stream(removeAcceleratedOffDeedDecayDone).anyMatch(value -> value == 0);
-        if (changesSuccessful) {
-            logger.log(Level.INFO, "removeAcceleratedOffDeedDecay option changes SUCCESSFUL");
-        } else {
-            logger.log(Level.INFO, "removeAcceleratedOffDeedDecay option changes FAILURE");
-            logger.log(Level.FINE, Arrays.toString(removeAcceleratedOffDeedDecayDone));
-        }
+        evaluateChangesArray(successes, "removeAcceleratedOffDeedDecay");
     }
 
     static private void allowAnyBuildingTypeReflection() throws NoSuchFieldException, IllegalAccessException  {
@@ -355,5 +335,15 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
             logger.log(Level.FINE, name + " in WallEnum set surfaceOnly to false.");
         }
         logger.log(Level.INFO, "allowAnyBuildingType changes successful for WallEnum.");
+    }
+
+    private static void evaluateChangesArray(int[] ints, String option) {
+        boolean changesSuccessful = !Arrays.stream(ints).anyMatch(value -> value == 0);
+        if (changesSuccessful) {
+            logger.log(Level.INFO, option + " option changes SUCCESSFUL");
+        } else {
+            logger.log(Level.INFO, option + " option changes FAILURE");
+            logger.log(Level.FINE, Arrays.toString(ints));
+        }
     }
 }
