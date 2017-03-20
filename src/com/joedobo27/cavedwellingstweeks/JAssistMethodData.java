@@ -18,7 +18,7 @@ class JAssistMethodData {
     private CodeAttribute codeAttribute;
     private CodeIterator codeIterator;
     private CtMethod ctMethod;
-    private static Logger logger = Logger.getLogger(WurminianPacifistMod.class.getName());
+    private static Logger logger = Logger.getLogger(CaveDwellingsTweaksMod.class.getName());
 
     JAssistMethodData(JAssistClassData jAssistClassData, String descriptor, String methodName) throws NullPointerException {
         parentClass = jAssistClassData;

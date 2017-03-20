@@ -32,16 +32,24 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
     private static boolean allowAnyBuildingType = false;
     private static boolean buildOnPlainCaveFloor = false;
     private static boolean removeAcceleratedOffDeedDecay = false;
-    private static ClassPool pool;
-    private static final Logger logger;
+    private static final String[] STEAM_VERSION = new String[]{"1.3.1.3"};
+    private static boolean versionCompliant = false;
+    private static ClassPool classPool = HookManager.getInstance().getClassPool();
+    private static final Logger logger = Logger.getLogger(CaveDwellingsTweaksMod.class.getName());
 
-    static {
-        logger = Logger.getLogger(CaveDwellingsTweaksMod.class.getName());
-        pool = HookManager.getInstance().getClassPool();
-    }
 
     @Override
     public void configure(Properties properties) {
+        if (Arrays.stream(STEAM_VERSION)
+                .filter(s -> Objects.equals(s, properties.getProperty("steamVersion", null)))
+                .count() > 0)
+            versionCompliant = true;
+        else
+            logger.log(Level.WARNING, "WU version mismatch. Your " + properties.getProperty(" steamVersion", null)
+                    + "version doesn't match one of SimpleConcreteCreationMod's required versions " + Arrays.toString(STEAM_VERSION));
+        if (!versionCompliant)
+            return;
+
         allowBuildAgainstWalls = Boolean.parseBoolean(properties.getProperty("allowBuildAgainstWalls", Boolean.toString(allowBuildAgainstWalls)));
         maxStories = Integer.parseInt(properties.getProperty("maxStories", Integer.toString(maxStories)));
         allowAnyBuildingType = Boolean.parseBoolean(properties.getProperty("allowAnyBuildingType", Boolean.toString(allowAnyBuildingType)));
@@ -51,11 +59,17 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
 
     @Override
     public void init() {
+        if (!versionCompliant)
+            return;
         try {
-            allowBuildAgainstWallsBytecode();
-            allowAnyBuildingTypeBytecode();
-            buildOnPlainCaveFloorBytecode();
-            removeAcceleratedOffDeedDecayBytecode();
+            if (allowBuildAgainstWalls)
+                allowBuildAgainstWallsBytecode();
+            if (allowAnyBuildingType)
+                allowAnyBuildingTypeBytecode();
+            if (buildOnPlainCaveFloor)
+                buildOnPlainCaveFloorBytecode();
+            if (removeAcceleratedOffDeedDecay)
+                removeAcceleratedOffDeedDecayBytecode();
         }catch(NotFoundException | CannotCompileException e){
             logger.log(Level.WARNING, e.toString(), e);
         }
@@ -63,15 +77,33 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
 
     @Override
     public void onServerStarted() {
+        if (!versionCompliant)
+            return;
         try {
             JAssistClassData.voidClazz();
 
-            allowAnyBuildingTypeReflection();
+            if (allowAnyBuildingType)
+                allowAnyBuildingTypeReflection();
         } catch (NoSuchFieldException | IllegalAccessException e) {
             logger.log(Level.WARNING, e.toString(), e);
         }
     }
 
+    /**
+     * This is a custom method to detect if a tile's corner is occupied by a structure. In vanilla WU it uses reinforced
+     * floors to stop people from modifying the cave floor under a building. If the reinforced requirement is removed there needs
+     * to be a way stop floor alterations.
+     *
+     * For flattening its a wide 3x3 circle that the method checks. Corner selection in flatten is buried an a complex and large
+     * procedural style coded method so its too difficult to just catch the affect corner and instead we look the whole area
+     * flatten might affect.
+     *
+     * @param performer WU Creature Object.
+     * @param targetTileX int primitive.
+     * @param targetTileY int primitive
+     * @param useTargetedTile boolean primitive.
+     * @return boolean primitive.
+     */
     @SuppressWarnings("unused")
     static public boolean isTileCornerFixedByStructure(Creature performer,int targetTileX, int targetTileY, boolean useTargetedTile) {
         boolean toReturn = false;
@@ -129,13 +161,11 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
      * @throws CannotCompileException JA related, forwarded.
      */
     static private void allowBuildAgainstWallsBytecode() throws NotFoundException, CannotCompileException {
-        if (!allowBuildAgainstWalls)
-            return;
         final int[] successes = new int[]{0};
 
         JAssistClassData methodsStructure = JAssistClassData.getClazz("MethodsStructure");
         if (methodsStructure == null)
-            methodsStructure = new JAssistClassData("com.wurmonline.server.behaviours.MethodsStructure", pool);
+            methodsStructure = new JAssistClassData("com.wurmonline.server.behaviours.MethodsStructure", classPool);
         methodsStructure.getCtClass().instrument(new ExprEditor() {
             @Override
             public void edit(MethodCall methodCall) throws CannotCompileException {
@@ -199,12 +229,10 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
      * @throws CannotCompileException JA related, forwarded.
      */
     static private void allowAnyBuildingTypeBytecode() throws NotFoundException, CannotCompileException {
-        if (!allowAnyBuildingType)
-            return;
         final int[] successes = new int[]{0};
         JAssistClassData wallEnum = JAssistClassData.getClazz("WallEnum");
         if (wallEnum == null)
-            wallEnum = new JAssistClassData("com.wurmonline.server.structures.WallEnum", pool);
+            wallEnum = new JAssistClassData("com.wurmonline.server.structures.WallEnum", classPool);
         JAssistMethodData getMaterialsFromToolType = new JAssistMethodData(wallEnum,
                 "(Lcom/wurmonline/server/items/Item;Lcom/wurmonline/server/creatures/Creature;)[B", "getMaterialsFromToolType");
         getMaterialsFromToolType.getCtMethod().instrument(new ExprEditor() {
@@ -236,7 +264,7 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
         final int[] successes = new int[]{0};
         JAssistClassData methodsStructure = JAssistClassData.getClazz("MethodsStructure");
         if (methodsStructure == null)
-            methodsStructure = new JAssistClassData("com.wurmonline.server.behaviours.MethodsStructure", pool);
+            methodsStructure = new JAssistClassData("com.wurmonline.server.behaviours.MethodsStructure", classPool);
         JAssistMethodData  canPlanStructureAt =  new JAssistMethodData(methodsStructure,
                 "(Lcom/wurmonline/server/creatures/Creature;Lcom/wurmonline/server/items/Item;III)Z", "canPlanStructureAt");
         canPlanStructureAt.getCtMethod().instrument(new ExprEditor(){
@@ -269,13 +297,13 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
 
         JAssistClassData methodsStructure = JAssistClassData.getClazz("MethodsStructure");
         if (methodsStructure == null)
-            methodsStructure = new JAssistClassData("com.wurmonline.server.behaviours.MethodsStructure", pool);
+            methodsStructure = new JAssistClassData("com.wurmonline.server.behaviours.MethodsStructure", classPool);
         JAssistMethodData expandHouseTile = new JAssistMethodData(methodsStructure,
                 "(Lcom/wurmonline/server/creatures/Creature;Lcom/wurmonline/server/items/Item;IIIF)Z", "expandHouseTile");
         expandHouseTile.getCtMethod().instrument(new ExprEditor(){
             @Override
             public void edit(MethodCall methodCall) throws CannotCompileException {
-                if (Objects.equals("decodeType", methodCall.getMethodName()) && methodCall.getLineNumber() == 429){
+                if (Objects.equals("decodeType", methodCall.getMethodName()) && methodCall.getLineNumber() == 428){
                     logger.log(Level.FINE, "expandHouseTile method,  edit call to " +
                             methodCall.getMethodName() + " at index " + methodCall.getLineNumber());
                     methodCall.replace("$_ = com.wurmonline.mesh.Tiles.Tile.TILE_CAVE_FLOOR_REINFORCED.id;");
@@ -303,14 +331,14 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
 
         JAssistClassData caveTileBehaviour = JAssistClassData.getClazz("CaveTileBehaviour");
         if (caveTileBehaviour == null)
-            caveTileBehaviour = new JAssistClassData("com.wurmonline.server.behaviours.CaveTileBehaviour", pool);
+            caveTileBehaviour = new JAssistClassData("com.wurmonline.server.behaviours.CaveTileBehaviour", classPool);
         JAssistMethodData getBehavioursFor = new JAssistMethodData(caveTileBehaviour,
                 "(Lcom/wurmonline/server/creatures/Creature;Lcom/wurmonline/server/items/Item;IIZII)Ljava/util/List;", "getBehavioursFor");
         getBehavioursFor.getCtMethod().instrument(new ExprEditor() {
             @Override
             public void edit(FieldAccess fieldAccess) throws CannotCompileException {
                 if (Objects.equals("id", fieldAccess.getFieldName()) && Objects.equals("com.wurmonline.mesh.Tiles$Tile", fieldAccess.getClassName()) &&
-                        fieldAccess.getLineNumber() == 116) {
+                        fieldAccess.getLineNumber() == 119) {
                     logger.log(Level.FINE, "getBehavioursFor method,  edit call to field " +
                             fieldAccess.getFieldName() + " at index " + fieldAccess.getLineNumber());
                     fieldAccess.replace("$_ = type;");
@@ -333,7 +361,7 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
         final int[] insertLineNumber = new int[]{0};
         JAssistClassData caveTileBehaviour = JAssistClassData.getClazz("CaveTileBehaviour");
         if (caveTileBehaviour == null)
-            caveTileBehaviour = new JAssistClassData("com.wurmonline.server.behaviours.CaveTileBehaviour", pool);
+            caveTileBehaviour = new JAssistClassData("com.wurmonline.server.behaviours.CaveTileBehaviour", classPool);
         JAssistMethodData handle_LEVEL = new JAssistMethodData(caveTileBehaviour,
                 "(Lcom/wurmonline/server/behaviours/Action;Lcom/wurmonline/server/creatures/Creature;Lcom/wurmonline/server/items/Item;IIIFI)Z",
                 "handle_LEVEL");
@@ -354,51 +382,78 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
         handle_LEVEL.getCtMethod().insertAt(insertLineNumber[0], source);
     }
 
+    /**
+     * Insert the contained java code block at the lineNumber for the code
+     *      if (Tiles.decodeType(tile) == Tiles.Tile.TILE_CAVE_FLOOR_REINFORCED.id && dir == 0) {...)
+     * @throws NotFoundException JA related, forwarded
+     * @throws CannotCompileException JA related, forwarded
+     */
     static private void handle_FLATTENBytecodeAlter() throws NotFoundException, CannotCompileException {
+        final int[] insertLineNumber = new int[]{0};
         JAssistClassData caveTileBehaviour = JAssistClassData.getClazz("CaveTileBehaviour");
         if (caveTileBehaviour == null)
-            caveTileBehaviour = new JAssistClassData("com.wurmonline.server.behaviours.CaveTileBehaviour", pool);
+            caveTileBehaviour = new JAssistClassData("com.wurmonline.server.behaviours.CaveTileBehaviour", classPool);
 
         JAssistMethodData handle_FLATTEN = new JAssistMethodData(caveTileBehaviour,
                 "(Lcom/wurmonline/server/behaviours/Action;Lcom/wurmonline/server/creatures/Creature;Lcom/wurmonline/server/items/Item;IIIFI)Z",
                 "handle_FLATTEN");
+        handle_FLATTEN.getCtMethod().instrument(new ExprEditor() {
+            @Override
+            public void edit(FieldAccess fieldAccess){
+                if (Objects.equals("id", fieldAccess.getFieldName())){
+                    insertLineNumber[0] = fieldAccess.getLineNumber();
+                }
+            }
+        });
+
         String source = "{ boolean isStructureOnCorner = dir == 0 && ";
         source += "com.joedobo27.cavedwellingstweeks.CaveDwellingsTweaksMod.isTileCornerFixedByStructure(performer, tilex, tiley, true);";
         source += "if (isStructureOnCorner){return true;} }";
-        handle_FLATTEN.getCtMethod().insertAt(721, source);
-        //insert right before:  if (Tiles.decodeType(tile) == Tiles.Tile.TILE_CAVE_FLOOR_REINFORCED.id && dir == 0) {
+        handle_FLATTEN.getCtMethod().insertAt(insertLineNumber[0], source);
 
     }
 
+    /**
+     * Insert the contained java code block at the lineNumber for CaveTileBehaviour.handle_MINE():
+     *      if (dir == 0 && tileType == Tiles.Tile.TILE_CAVE_FLOOR_REINFORCED.id && performer.getPower() < 2) {...}
+     * This is to handle altering corners under buildings.
+     *
+     * @throws NotFoundException JA related, forwarded
+     * @throws CannotCompileException JA related, forwarded
+     */
     static private void handle_MINEBytecodeAlter() throws NotFoundException, CannotCompileException {
         JAssistClassData caveTileBehaviour = JAssistClassData.getClazz("CaveTileBehaviour");
         if (caveTileBehaviour == null)
-            caveTileBehaviour = new JAssistClassData("com.wurmonline.server.behaviours.CaveTileBehaviour", pool);
+            caveTileBehaviour = new JAssistClassData("com.wurmonline.server.behaviours.CaveTileBehaviour", classPool);
         JAssistMethodData handle_MINE = new JAssistMethodData(caveTileBehaviour,
                 "(Lcom/wurmonline/server/behaviours/Action;Lcom/wurmonline/server/creatures/Creature;Lcom/wurmonline/server/items/Item;IISFI)Z",
                 "handle_MINE");
         String source = "{ boolean isStructureOnCorner = dir == 0 && com.joedobo27.cavedwellingstweeks.CaveDwellingsTweaksMod.isTileCornerFixedByStructure(performer, tilex, tiley, false);";
         source += "if (isStructureOnCorner){return true;} }";
-        handle_MINE.getCtMethod().insertAt(965, source);
-        //insert right before: if (dir == 0 && tileType == Tiles.Tile.TILE_CAVE_FLOOR_REINFORCED.id && performer.getPower() < 2) {
+        handle_MINE.getCtMethod().insertAt(1004, source);
     }
 
+    /**
+     * Insert the contained java code block at the lineNumber for CaveTileBehaviour.raiseRockLevel():
+     *      if (CaveTile.decodeCeilingHeight(tile) <= 20) {...}
+     * This is to handle altering corners under buildings.
+     *
+     * @throws NotFoundException JA related, forwarded
+     * @throws CannotCompileException JA related, forwarded
+     */
     static private void raiseRockLevelBytecodeAlter() throws NotFoundException, CannotCompileException {
         JAssistClassData caveTileBehaviour = JAssistClassData.getClazz("CaveTileBehaviour");
         if (caveTileBehaviour == null)
-            caveTileBehaviour = new JAssistClassData("com.wurmonline.server.behaviours.CaveTileBehaviour", pool);
+            caveTileBehaviour = new JAssistClassData("com.wurmonline.server.behaviours.CaveTileBehaviour", classPool);
         JAssistMethodData raiseRockLevel = new JAssistMethodData(caveTileBehaviour,
                 "(Lcom/wurmonline/server/creatures/Creature;Lcom/wurmonline/server/items/Item;IIFLcom/wurmonline/server/behaviours/Action;)Z",
                 "raiseRockLevel");
-        source = "{ boolean isStructureOnCorner = com.joedobo27.cavedwellingstweeks.CaveDwellingsTweaksMod.isTileCornerFixedByStructure(performer, tilex, tiley, false);";
+        String source = "{ boolean isStructureOnCorner = com.joedobo27.cavedwellingstweeks.CaveDwellingsTweaksMod.isTileCornerFixedByStructure(performer, tilex, tiley, false);";
         source += "if (isStructureOnCorner){return true;} }";
-        raiseRockLevel.getCtMethod().insertAt(1290, source);
-        // insert right before: if (CaveTile.decodeCeilingHeight(tile) <= 20) {
+        raiseRockLevel.getCtMethod().insertAt(1381, source);
     }
 
     static private void buildOnPlainCaveFloorBytecode() throws NotFoundException, CannotCompileException {
-        if (!buildOnPlainCaveFloor)
-            return;
         final int[] successes = new int[]{0,0,0};
         int[] result;
 
@@ -413,7 +468,7 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
 
         evaluateChangesArray(successes, "buildOnPlainCaveFloor");
 
-        // There is no code in WU that stops mining actions (mine, flatten, level) or using concrete on corners that have structures on them.
+        // There is no code in WU that stops mining/concrete use actions (mine, flatten, level, raise) on corners that have structures on them.
         // I'll be inserting lines that call my structure detection method "isTileCornerFixedByStructure".
         handle_LEVELBytecodeAlter();
         handle_FLATTENBytecodeAlter();
@@ -422,10 +477,8 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
     }
 
     static private void removeAcceleratedOffDeedDecayBytecode() throws NotFoundException, CannotCompileException {
-        if (!removeAcceleratedOffDeedDecay)
-            return;
         final int[] successes = {0, 0};
-        JAssistClassData floor = new JAssistClassData("com.wurmonline.server.structures.Floor", pool);
+        JAssistClassData floor = new JAssistClassData("com.wurmonline.server.structures.Floor", classPool);
         JAssistMethodData pollFloor = new JAssistMethodData(floor, "(JLcom/wurmonline/server/zones/VolaTile;Lcom/wurmonline/server/structures/Structure;)Z",
                 "poll");
         pollFloor.getCtMethod().instrument(new ExprEditor() {
@@ -440,7 +493,7 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
             }
         });
 
-        JAssistClassData wall = new JAssistClassData("com.wurmonline.server.structures.Wall", pool);
+        JAssistClassData wall = new JAssistClassData("com.wurmonline.server.structures.Wall", classPool);
         JAssistMethodData pollWall = new JAssistMethodData(wall, "(JLcom/wurmonline/server/zones/VolaTile;Lcom/wurmonline/server/structures/Structure;)V",
                 "poll");
         pollWall.getCtMethod().instrument(new ExprEditor() {
@@ -458,18 +511,15 @@ public class CaveDwellingsTweaksMod implements WurmServerMod, Configurable, Init
     }
 
     static private void allowAnyBuildingTypeReflection() throws NoSuchFieldException, IllegalAccessException  {
-        if (!allowAnyBuildingType)
-            return;
         WallEnum[] oldValues = ReflectionUtil.getPrivateField(WallEnum.class, ReflectionUtil.getField(WallEnum.class, "$VALUES"));
         for (Object a : oldValues){
             ReflectionUtil.setPrivateField(a, ReflectionUtil.getField(WallEnum.class, "surfaceOnly"), Boolean.FALSE);
-            String name = ReflectionUtil.getPrivateField(a, ReflectionUtil.getField(WallEnum.class, "name"));
         }
         logger.log(Level.INFO, "allowAnyBuildingType changes successful for WallEnum.");
     }
 
     private static void evaluateChangesArray(int[] ints, String option) {
-        boolean changesSuccessful = !Arrays.stream(ints).anyMatch(value -> value == 0);
+        boolean changesSuccessful = Arrays.stream(ints).noneMatch(value -> value == 0);
         if (changesSuccessful) {
             logger.log(Level.INFO, option + " option changes SUCCESSFUL");
         } else {

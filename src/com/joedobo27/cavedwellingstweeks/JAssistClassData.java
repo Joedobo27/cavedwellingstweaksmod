@@ -20,7 +20,7 @@ class JAssistClassData {
     private ClassFile classFile;
     private ConstPool constPool;
     private static HashMap<String, JAssistClassData> clazz;
-    private static Logger logger = Logger.getLogger(WurminianPacifistMod.class.getName());
+    private static Logger logger = Logger.getLogger(CaveDwellingsTweaksMod.class.getName());
 
     JAssistClassData(String classPath, ClassPool classPool) throws NotFoundException {
         ctClass = classPool.get(classPath);
